@@ -4,12 +4,12 @@ import java.io.*;
 
 public class InventoryManagementSystem {
 
-  private static final String INVENTORY_FILE = "inventory.dat";
-  private static final String ORDERS_FILE = "orders.dat";
-  private static final String SALES_FILE = "sales.dat";
-  private static List<Sale> salesHistory = new ArrayList<>();
-  private static Map<String, Item> inventory = new HashMap<>();
-  private static Queue<Order> orderQueue = new LinkedList<>();
+  private static final String INVENTORY_FILE = "inventory.csv";
+  private static final String ORDERS_FILE = "orders.csv";
+  private static final String SALES_FILE = "sales.csv";
+  private static final List<Sale> salesHistory = new ArrayList<>();
+  private static final Map<String, Item> inventory = new HashMap<>();
+  private static final Queue<Order> orderQueue = new LinkedList<>();
 
   public static void main(String[] args) {
     loadInventory();
@@ -257,16 +257,20 @@ public class InventoryManagementSystem {
     while (true) {
       System.out.println("\n===== Reports =====");
       System.out.println("1. Stock Report (Low Stock)"); // Items with quantity less than 5 to add more quantity to it
-      System.out.println("2. Sales Report");
-      System.out.println("3. Back to Main Menu");
+      System.out.println("2. Full Stock Report");
+      System.out.println("3. Empty Stock Report");
+      System.out.println("4. Sales Report");
+      System.out.println("5. Back to Main Menu");
       System.out.print("Enter your choice: ");
       int choice = scanner.nextInt();
       scanner.nextLine();
 
       switch (choice) {
         case 1 -> generateStockReport();
-        case 2 -> generateSalesReport();
-        case 3 -> {
+        case 2 -> generateFullStockReport();
+        case 3 -> generateEmptyStockReport();
+        case 4 -> generateSalesReport();
+        case 5 -> {
           return;
         }
         default -> System.out.println("Invalid choice! Try again.");
@@ -274,10 +278,27 @@ public class InventoryManagementSystem {
     }
   }
 
+  private static void generateEmptyStockReport() {
+    System.out.println("\nEmpty Stock Items:");
+    for (Item item : inventory.values()) {
+      if (item.quantity == 0) {
+        System.out.println(item);
+      }
+    }
+  }
+
+  private static void generateFullStockReport() {
+    System.out.println("\nFull Stock Items:");
+    for (Item item : inventory.values()) {
+      if(item.quantity > 0)
+        System.out.println(item);
+    }
+  }
+
   private static void generateStockReport() {
     System.out.println("\nLow Stock Items:");
     for (Item item : inventory.values()) {
-      if (item.quantity < 5) {
+      if (item.quantity < 5 && item.quantity > 0) {
         System.out.println(item);
       }
     }
@@ -292,56 +313,100 @@ public class InventoryManagementSystem {
 
   // Persistence
   private static void saveInventory() {
-    try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(INVENTORY_FILE))) {
-      oos.writeObject(inventory);
+    List<String[]> data = new ArrayList<>();
+    for (Item item : inventory.values()) {
+      data.add(new String[]{item.itemId, item.name, String.valueOf(item.price), String.valueOf(item.quantity)});
+    }
+    try {
+      CSVUtils.writeCSV(INVENTORY_FILE, data);
       System.out.println("Inventory saved successfully!");
     } catch (IOException e) {
       System.err.println("Error saving inventory: " + e.getMessage());
     }
   }
-@SuppressWarnings("unchecked")
+
   private static void loadInventory() {
-    try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(INVENTORY_FILE))) {
-      inventory = (Map<String, Item>) ois.readObject();
+    try {
+      List<String[]> data = CSVUtils.readCSV(INVENTORY_FILE);
+      inventory.clear();
+      for (String[] row : data) {
+        String itemId = row[0];
+        String name = row[1];
+        double price = Double.parseDouble(row[2]);
+        int quantity = Integer.parseInt(row[3]);
+        inventory.put(itemId, new Item(itemId, name, price, quantity));
+      }
       System.out.println("Inventory loaded successfully!");
-    } catch (IOException | ClassNotFoundException e) {
-      inventory = new HashMap<>();
+    } catch (IOException e) {
+      System.out.println("Error loading inventory. Starting with an empty inventory.");
     }
   }
 
+
   private static void saveOrders() {
-    try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(ORDERS_FILE))) {
-      oos.writeObject(orderQueue);
+    List<String[]> data = new ArrayList<>();
+    for (Order order : orderQueue) {
+      String items = order.items.entrySet()
+              .stream()
+              .map(entry -> entry.getKey() + ":" + entry.getValue())
+              .reduce((a, b) -> a + ";" + b)
+              .orElse("");
+      data.add(new String[]{order.orderId, order.customerName, items});
+    }
+    try {
+      CSVUtils.writeCSV(ORDERS_FILE, data);
+      System.out.println("Orders saved successfully!");
     } catch (IOException e) {
       System.err.println("Error saving orders: " + e.getMessage());
     }
   }
-@SuppressWarnings("unchecked")
+
   private static void loadOrders() {
-    try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(ORDERS_FILE))) {
-      orderQueue = (Queue<Order>) ois.readObject();
-    } catch (IOException | ClassNotFoundException e) {
-      orderQueue = new LinkedList<>();
+    try {
+      List<String[]> data = CSVUtils.readCSV(ORDERS_FILE);
+      orderQueue.clear();
+      for (String[] row : data) {
+        String orderId = row[0];
+        String customerName = row[1];
+        Map<String, Integer> items = new HashMap<>();
+        for (String itemEntry : row[2].split(";")) {
+          String[] itemData = itemEntry.split(":");
+          items.put(itemData[0], Integer.parseInt(itemData[1]));
+        }
+        orderQueue.add(new Order(orderId, customerName, items));
+      }
+      System.out.println("Orders loaded successfully!");
+    } catch (IOException e) {
+      System.out.println("Error loading orders. Starting with an empty order queue.");
     }
   }
   private static void saveSales() {
-    try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(SALES_FILE))) {
-      oos.writeObject(salesHistory);
-      System.out.println("Sales history saved successfully.");
+    List<String[]> data = new ArrayList<>();
+    for (Sale sale : salesHistory) {
+      data.add(new String[]{sale.itemId, sale.name, String.valueOf(sale.price), String.valueOf(sale.quantity)});
+    }
+    try {
+      CSVUtils.writeCSV(SALES_FILE, data);
+      System.out.println("Sales history saved successfully!");
     } catch (IOException e) {
       System.err.println("Error saving sales history: " + e.getMessage());
     }
   }
-@SuppressWarnings("unchecked")
+
   private static void loadSales() {
-    try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(SALES_FILE))) {
-      salesHistory = (List<Sale>) ois.readObject();
-      System.out.println("Sales history loaded successfully.");
-    } catch (FileNotFoundException e) {
-      System.out.println("Sales file not found. Starting with an empty sales history.");
-    } catch (IOException | ClassNotFoundException e) {
-      System.err.println("Error loading sales history: " + e.getMessage());
-      salesHistory = new ArrayList<>();
+    try {
+      List<String[]> data = CSVUtils.readCSV(SALES_FILE);
+      salesHistory.clear();
+      for (String[] row : data) {
+        String itemId = row[0];
+        String itemName = row[1];
+        double totalPrice = Double.parseDouble(row[2]);
+        int quantity = Integer.parseInt(row[3]);
+        salesHistory.add(new Sale(itemId, itemName, totalPrice, quantity));
+      }
+      System.out.println("Sales history loaded successfully!");
+    } catch (IOException e) {
+      System.out.println("Error loading sales history. Starting with an empty sales history.");
     }
   }
 }
